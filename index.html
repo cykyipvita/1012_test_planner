@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>STM# 1012 Test Planner</title>
+<style>
+  :root { 
+    --bg: #f6f8fa; 
+    --fg: #24292f; 
+    --muted: #57606a; 
+    --accent: #0969da; 
+    --card: #ffffff; 
+    --ok: #1a7f37; 
+    --warn: #9a6700; 
+    --err: #d1242f;
+    --border: #d0d7de;
+  }
+  *{box-sizing:border-box}
+  body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif; background:var(--bg); color:var(--fg); margin:0}
+  header{padding:16px 20px; border-bottom:1px solid var(--border); background:linear-gradient(180deg, #f0f2f5, var(--bg) 55%)}
+  h1{margin:0; font-size:20px}
+  main{padding:20px; max-width:1200px; margin:auto}
+  .row{display:flex; gap:16px; flex-wrap:wrap}
+  .card{background:var(--card); border:1px solid var(--border); border-radius:12px; padding:16px; flex:1}
+  textarea, input[type="text"]{background:var(--card); color:var(--fg); border:1px solid var(--border); border-radius:10px; padding:10px}
+  textarea{width:100%; min-height:140px; font-family:ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace}
+  .btn{background:var(--accent); color:#fff; border:none; border-radius:10px; padding:10px 14px; cursor:pointer}
+  .btn.ghost{background:#f6f8fa; color:var(--fg); border:1px solid var(--border);}
+  .pill{display:inline-block; padding:2px 8px; border-radius:999px; border:1px solid var(--border); color:var(--muted); font-size:12px}
+  .section-title{font-size:16px; color:var(--fg); font-weight:bold; margin-bottom:10px; border-bottom: 1px solid var(--border); padding-bottom: 8px;}
+  .grid{display:grid; gap:10px}
+  .grid.cols-2{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .grid.cols-3{grid-template-columns:repeat(3,minmax(0,1fr))}
+  hr{border-color: var(--border); margin: 20px 0;}
+  table{width:100%; border-collapse:collapse}
+  th,td{border-bottom:1px solid var(--border); padding:8px; text-align:left}
+  th{color:#333}
+  .vf{border:1px dashed #a0a7b1; border-radius:10px; padding:8px; margin:8px 0}
+  #status{margin-left:12px; font-size:13px}
+  .ok{color:var(--ok)} .warn{color:var(--warn)} .err{color:var(--err)}
+  details{border:1px solid var(--border); border-radius:10px; padding:12px; background:#f6f8fa; margin-top: 16px;}
+  summary{cursor:pointer; font-weight: bold;}
+  .ref-list{column-count:3; column-gap:20px; margin-top:10px;}
+  .ref-list ul {padding-left: 20px; margin: 0;}
+  footer{text-align:center; padding: 20px; margin-top: 20px; font-size:12px; color:var(--muted);}
+  @media(max-width: 768px) { .ref-list{column-count:1;} }
+</style>
+</head>
+<body>
+<header>
+  <h1>STM#1012 Test Planner</h1>
+  <div class="pill">Adopted from Rev 012 • Embedded water solubility DB</div>
+</header>
+<main>
+  <div class="row">
+    <div class="card" style="flex:2">
+      <div class="section-title">Input Sample List</div>
+      <p>Format: <code>Item# | solvent, ...</code></p>
+      <textarea id="inputArea" placeholder="RM0629 | Methanol, Acetone, Ethanol
+RM0110 | USP<467>"></textarea>
+      <div class="row" style="align-items:center; margin-top:10px">
+        <span id="status" class="warn"></span>
+        <div style="flex:1"></div>
+        <button class="btn ghost" onclick="demo()">Use example</button>
+        <button class="btn ghost" onclick="clearAll()">Clear</button>
+        <button class="btn" onclick="generate()">Generate plan</button>
+      </div>
+    </div>
+    <div class="card" style="flex:1">
+      <div class="section-title">Lookup Tools</div>
+      <div>
+        <label class="pill" style="margin-bottom:6px; display:inline-block;">Solubility DB</label>
+        <input id="lookupId" type="text" placeholder="Item# e.g., 000257" />
+        <button class="btn" style="margin-top:6px" onclick="lookupSol()">Lookup ID</button>
+        <div id="lookupOut" style="margin-top:10px"></div>
+        <div class="pill" id="dbInfo" style="margin-top:8px"></div>
+      </div>
+      <hr />
+      <div>
+        <label class="pill" style="margin-bottom:6px; display:inline-block;">Solvent Class</label>
+        <input id="lookupSolventName" type="text" placeholder="Solvent e.g., IPA" />
+        <button class="btn" style="margin-top:6px" onclick="lookupSolventClass()">Lookup Class</button>
+        <div id="lookupSolventOut" style="margin-top:10px"></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="results"></div>
+
+  <details>
+      <summary>View All Solvents by Class</summary>
+      <div id="solventRef" class="ref-list" style="column-count: 4;"></div>
+  </details>
+  <details>
+      <summary>View Solubility Database</summary>
+      <div id="dbRef" class="ref-list"></div>
+  </details>
+
+</main>
+<footer>
+    Last Update: Aug 12, 2025 • Maintained by Karl Yip <a href="mailto:cykyipvita@gmail.com">Send email
+</footer>
+<script>
+let SolubilityDB = {"000257": {"name": "Valerian Root", "solubility": "Soluble"}, "000302": {"name": "Riboflavin Universal NGMO", "solubility": "Soluble"}, "000303": {"name": "Cyanocobalamin NGMO", "solubility": "Soluble"}, "000306": {"name": "Folic Acid NGMO", "solubility": "Soluble"}, "000307": {"name": "Calcium D-Pantothenate NGMO", "solubility": "Soluble"}, "000312": {"name": "Zinc Gluconate", "solubility": "Soluble"}, "000316": {"name": "Vitamin E Synthetic Acetate 50% SD", "solubility": "Insoluble"}, "000320": {"name": "Dl-Alpha-Tocopheryl Acetate", "solubility": "Insoluble"}, "000452": {"name": "PSEUDOEPHEDRINE HCL", "solubility": "Soluble"}, "000461": {"name": "Pyridoxine HCL 97-98% DC", "solubility": "Soluble"}, "000462": {"name": "Vitamin B1 Mononitrate DC-98%", "solubility": "Soluble"}, "000491": {"name": "Choline Bitartrate 1% NGMO", "solubility": "Soluble"}, "000512": {"name": "Potassium Iodide", "solubility": "Soluble"}, "000588": {"name": "Dextromethorphan HBR", "solubility": "Soluble"}, "000603": {"name": "Thiamine Mononitrate Rocoat 33", "solubility": "Insoluble"}, "000604": {"name": "Riboflavin Rocoat 33.3%", "solubility": "Soluble"}, "000605": {"name": "Pyridoxine HCL Rocoat", "solubility": "Soluble"}, "000609": {"name": "Ferrous Fumarate NGMO", "solubility": "Insoluble"}, "000626": {"name": "CROSCARMELLOSE SODIUM NF", "solubility": "Soluble"}, "000646": {"name": "Dimenhydrinate", "solubility": "Insoluble"}, "000653": {"name": "Methocel K100M Premium Hydroxypropyl Methylcellulose", "solubility": "Soluble"}, "000655": {"name": "Caffeine Anhydrous USP", "solubility": "Soluble"}, "000780": {"name": "Vitamin E Synthetic Acetate 75% SD NGMO", "solubility": "Insoluble"}, "000825": {"name": "DIBUTYL SEBACATE", "solubility": "Insoluble"}, "000826": {"name": "Diphenhydramine Hydrochloride", "solubility": "Soluble"}, "000831": {"name": "ATR Sodium Starch Glycolate", "solubility": "Insoluble"}, "000883": {"name": "Manganese Sulfate Monohydrate", "solubility": "Soluble"}, "000894": {"name": "Beta Carotene 20% NGMO", "solubility": "Insoluble"}, "000929": {"name": "Alginic Acid", "solubility": "Insoluble"}, "000940": {"name": "Aquacoat ECD-30", "solubility": "Insoluble"}, "M570": {"name": "SS-Mini Vits Tablets 31247", "solubility": "Soluble"}, "P397": {"name": "CALCIUM 600 MG VITAMIN D 500 IU SOFTGEL", "solubility": "Insoluble"}, "P417": {"name": "SS-VEGETARIAN DHA 200MG 21500", "solubility": "Insoluble"}, "P493": {"name": "SS-Full Spectrum Curcumin SGL NGMO", "solubility": "Insoluble"}, "P526": {"name": "VIT C 1000 MG WRH 40", "solubility": "Soluble"}, "P537": {"name": "Milk Thistle", "solubility": "Insoluble"}, "P540": {"name": "Melatonin 5mg Softgels", "solubility": "Insoluble"}, "P543": {"name": "PRENATAL DHA MULTIVIT", "solubility": "Soluble"}, "P545": {"name": "Lutein 20 mg", "solubility": "Insoluble"}, "P547": {"name": "Magnesium Oxide 500 mg Tablets", "solubility": "Insoluble"}, "P548": {"name": "Biotin 1000 mcg", "solubility": "Soluble"}, "P549": {"name": "CoQ10 100mg Softgels", "solubility": "Insoluble"}, "P550": {"name": "CO-Q10 200MG CPS", "solubility": "Insoluble"}, "P554": {"name": "TURMRIC CURCMIN 450 50MG", "solubility": "Insoluble"}, "P555": {"name": "GINGKO BILOBA 120MG", "solubility": "Soluble"}, "P558": {"name": "C1000MG PLAIN WR.H", "solubility": "Soluble"}, "P559": {"name": "CHROMIUM 200MCG TABLET", "solubility": "Soluble"}, "P560": {"name": "L-LYSINE 1000MG TB", "solubility": "Soluble"}, "P564": {"name": "Magnesium+Electrolytes FCT", "solubility": "Insoluble"}, "RM0017": {"name": "Sodium Lauryl Sulfate", "solubility": "Soluble"}, "RM0021": {"name": "Compressible Sugar", "solubility": "Soluble"}, "RM0071": {"name": "Doxylamine succinate", "solubility": "Soluble"}, "RM0105": {"name": "Grape FlavArt Durarome LHP", "solubility": "Soluble"}, "RM0110": {"name": "Sodium Ascorbate", "solubility": "Soluble"}, "RM0120": {"name": "ATR COATING OPADRY II YELLOW 85F12374", "solubility": "Soluble"}, "RM0121": {"name": "Flavour cooling liquid", "solubility": "Soluble"}, "RM0142": {"name": "Chondroitin Sulfate Sodium Powder", "solubility": "Soluble"}, "RM0198": {"name": "Lutein 10% VG Granules NGMO", "solubility": "Soluble"}, "RM0203": {"name": "Dry Vitamin K1 NGMO", "solubility": "Insoluble"}, "RM0207": {"name": "ATR COATING OPADRY II CLEAR 85F19250", "solubility": "Soluble"}, "RM0238": {"name": "Crospovidone (Polyplasdoone XL)", "solubility": "Insoluble"}, "RM0266": {"name": "Mantrocel E-6, Hydroxypropylmethylcellulose, Hypromellose", "solubility": "Soluble"}, "RM0271": {"name": "FD&C Blue #2 Aluminum Lake 12-14%", "solubility": "Soluble"}, "RM0291": {"name": "Alpha Lipoic Acid", "solubility": "Insoluble"}, "RM0311": {"name": "SS Cherry Powder, AF CERI-0002", "solubility": "Soluble"}, "RM0315": {"name": "SS Cinnamon 20:1 (52509)", "solubility": "Insoluble"}, "RM0335": {"name": "SS-Flavor black raspberry natural PROD181124 (52797)", "solubility": "Soluble"}, "RM0348": {"name": "SS-Flavor Natural Raspberry powder (52795)", "solubility": "Soluble"}, "RM0377": {"name": "SS-Melatonin NGMO", "solubility": "Insoluble"}, "RM0378": {"name": "SS-Methylcobalamin 53360 NGMO", "solubility": "Soluble"}, "RM0382": {"name": "CYAN-X Multi-Anthocyanins 5%", "solubility": "Soluble"}, "RM0393": {"name": "SS Pyridoxal 5-Phosphate 53631", "solubility": "Insoluble"}, "RM0394": {"name": "SS-Rhodiola Rosea 3% Extract 53670 NGMO", "solubility": "Soluble"}, "RM0395": {"name": "SS-Riboflavin 5-Phosphate NGMO 53691", "solubility": "Soluble"}, "RM0413": {"name": "SS-Stevia PE 80% Powder", "solubility": "Soluble"}, "RM0417": {"name": "SS-Thiamine Hydrochloride 53955 NGMO", "solubility": "Soluble"}, "RM0423": {"name": "SS Vitamin D2 100000IU/G 54073", "solubility": "Insoluble"}, "RM0425": {"name": "SS-Vitamin E Succinate 1185IU 52635", "solubility": "Insoluble"}, "RM0436": {"name": "SS-Black Cohosh Extract 2.5% 52323 NGMO", "solubility": "Soluble"}, "RM0445": {"name": "SS-Echinacea Purpurea Extract 52700", "solubility": "Soluble"}, "RM0472": {"name": "Calcium Sennosides PWD 20%", "solubility": "Soluble"}, "RM0517": {"name": "Methocel K15M", "solubility": "Soluble"}, "RM0527": {"name": "Dry Vitamin E Acetate 950 NS", "solubility": "Insoluble"}, "RM0531": {"name": "MSM (methysulfonylmethane)", "solubility": "Soluble"}, "RM0535": {"name": "Quercetin Anhydrous", "solubility": "Soluble"}, "RM0566": {"name": "Inositol DC 95% Granular", "solubility": "Soluble"}, "RM0569": {"name": "SS Echinacea Purpurea Root 4:1 Extract", "solubility": "Soluble"}, "RM0571": {"name": "Cinnamon Powder Extract", "solubility": "Soluble"}, "RM0604": {"name": "Ferrous Sulfate Dried", "solubility": "Soluble"}, "RM0618": {"name": "American Ginseng Root 4%", "solubility": "Soluble"}, "RM0619": {"name": "Echinacea Angustifolia Root", "solubility": "Soluble"}, "RM0623": {"name": "Horsetail PE", "solubility": "Soluble"}, "RM0625": {"name": "Vitamin A Acetate Dry 500B", "solubility": "Insoluble"}, "RM0626": {"name": "Lycopene 10%", "solubility": "Insoluble"}, "RM0627": {"name": "CROSCARMEL SODIUM NGMO", "solubility": "Soluble"}, "RM0633": {"name": "Thiamine Mononitrate NGMO", "solubility": "Soluble"}, "RM0635": {"name": "Ascorbic Acid C-97 Starch Free NGMO", "solubility": "Soluble"}, "RM0652": {"name": "Vit E Acetate Dry 50% CWS", "solubility": "Insoluble"}, "RM0653": {"name": "VIT A. ACETATE DRY 325", "solubility": "Insoluble"}, "RM0671": {"name": "ECHINACEA ANG ROOT", "solubility": "Soluble"}, "RM0681": {"name": "CROSCARM SODIUM NF N-GMO 62902", "solubility": "Soluble"}, "RM0686": {"name": "OPADRY PINK 85F140205", "solubility": "Insoluble"}, "RM0689": {"name": "Alginic Acid", "solubility": "Insoluble"}, "RM0699": {"name": "RM0699-000 DRY VIT. A PALMITATE 250 I.U. PWD BEAD", "solubility": "Insoluble"}, "RM0702": {"name": "Caffeine Anhydrous", "solubility": "Soluble"}, "RM0718": {"name": "MCC", "solubility": "Soluble"}, "RM0723": {"name": "Beta Carotene 20% NGMO", "solubility": "Insoluble"}, "RM0629": {"name": "Methocarbamol DC", "solubility": "Insoluble"}, "RM0721": {"name": "Ashwagandha 10:1 Root Extract", "solubility": "Soluble"}, "RM0726": {"name": "ASCORBIC ACID FINE PWD", "solubility": "Soluble"}, "RM0616": {"name": "Hyabest (S) LF-P, sodium hyaluronate", "solubility": "Soluble"}, "RM0713": {"name": "NMN", "solubility": "Soluble"}, "RM0714": {"name": "PQQ", "solubility": "Soluble"}, "RM0719": {"name": "Black pepper extract 95%", "solubility": "Insoluble"}, "RM0722": {"name": "Phytocera NW-10", "solubility": "Insoluble"}, "RM0724": {"name": "RESVERATROL PWD NGMO", "solubility": "Insoluble"}};
+
+// Canonicalization & class maps
+const alias = new Map([
+  ['2-propanol','2-propanol'],['isopropanol','2-propanol'],['isopropyl alcohol','2-propanol'],['propan-2-ol','2-propanol'],['ipa','2-propanol'],
+  ['ethanol','ethanol'],['ethyl alcohol','ethanol'],['methanol','methanol'],['methyl alcohol','methanol'],['acetonitrile','acetonitrile'],['acn','acetonitrile'],
+  ['methylene chloride','methylene chloride'],['dichloromethane','methylene chloride'],['dcm','methylene chloride'],['mc','methylene chloride'],
+  ['1,2-dichloroethene','1,2-dichloroethene'],['1,2-dichloroethylene','1,2-dichloroethene'],['cis-1,2-dichloroethene','1,2-dichloroethene'],['trans-1,2-dichloroethene','1,2-dichloroethene'],['dce','1,2-dichloroethene'],
+  ['tetrahydrofuran','tetrahydrofuran'],['thf','tetrahydrofuran'],['cyclohexane','cyclohexane'],['methylcyclohexane','methylcyclohexane'],
+  ['1,4-dioxane','1,4-dioxane'],['p-dioxane','1,4-dioxane'],['methylisobutylketone','methylisobutylketone'],['mibk','methylisobutylketone'],
+  ['toluene','toluene'],['chlorobenzene','chlorobenzene'],['xylene','xylene'],['cumene','cumene'],
+  ['tertiary butyl alcohol','tertiary butyl alcohol'],['t-butyl alcohol','tertiary butyl alcohol'],['tert-butanol','tertiary butyl alcohol'],['t-butanol','tertiary butyl alcohol'],['tba','tertiary butyl alcohol'],
+  ['hexane','hexane'],['n-hexane','hexane'],['nitromethane','nitromethane'],['chloroform','chloroform'],['1,2-dimethoxyethane','1,2-dimethoxyethane'],
+  ['trichloroethylene','trichloroethylene'],['cyclopentyl methyl ether','cyclopentyl methyl ether'],['cpme','cyclopentyl methyl ether'],['pyridine','pyridine'],['methylbutylketone','methylbutylketone'],['2-hexanone','methylbutylketone'],['tetralin','tetralin'],
+  ['1,1-dichloroethene','1,1-dichloroethene'],
+  ['1,1,1-trichloroethane','1,1,1-trichloroethane'],['tce','1,1,1-trichloroethane'],['methyl chloroform','1,1,1-trichloroethane'],['tca','1,1,1-trichloroethane'],
+  ['carbon tetrachloride','carbon tetrachloride'],['benzene','benzene'],
+  ['1,2-dichloroethane','1,2-dichloroethane'],['ethylene dichloride','1,2-dichloroethane'],
+  // Class 3
+  ['acetone','acetone'],['2-propanone','acetone'],
+  ['ethyl acetate','ethyl acetate'],['etOAc','ethyl acetate'],['etac','ethyl acetate'],['ea','ethyl acetate'],
+  ['2-methyl-1-propanol','2-methyl-1-propanol'],['isobutanol','2-methyl-1-propanol'],
+  ['methyl acetate','methyl acetate'],['butyl acetate','butyl acetate'],['isobutyl acetate','isobutyl acetate'],['1-butanol','1-butanol'],
+  ['tert-butylmethyl ether','tert-butylmethyl ether'],['tbme','tert-butylmethyl ether'],['mtbe','tert-butylmethyl ether'],
+  ['2-butanol','2-butanol'],['3-methyl-1-butanol','3-methyl-1-butanol'],
+  ['1-propanol','1-propanol'],['1-pentanol','1-pentanol'],['propyl acetate','propyl acetate'],['isopropyl acetate','isopropyl acetate'],
+  ['ethyl formate','ethyl formate'],['ethyl ether','ethyl ether'],['diethyl ether','ethyl ether'],
+  ['methyl ethyl ketone','methyl ethyl ketone'],['mek','methyl ethyl ketone'],
+  ['heptane','heptane'],['pentane','pentane'],['anisole','anisole'],
+  // Special Keywords
+  ['usp<467>', 'usp<467>'], ['usp467', 'usp<467>'],
+  ['meet requirement', 'usp<467>'],
+  ['class 3', 'class 3']
+]);
+const CLASS1 = new Set(['1,1-dichloroethene','1,1,1-trichloroethane','carbon tetrachloride','benzene','1,2-dichloroethane']);
+const CLASS2A = new Set(['methanol','acetonitrile','methylene chloride','1,2-dichloroethene','tetrahydrofuran','cyclohexane','methylcyclohexane','1,4-dioxane','methylisobutylketone','toluene','chlorobenzene','xylene','cumene']);
+const CLASS2B = new Set(['tertiary butyl alcohol','hexane','nitromethane','chloroform','1,2-dimethoxyethane','trichloroethylene','cyclopentyl methyl ether','pyridine','methylbutylketone','tetralin']);
+const CLASS3_A_V = {'ethanol':780,'acetone':780,'2-propanol':790,'ethyl acetate':680,'2-methyl-1-propanol':770,'methyl acetate':660,'butyl acetate':350,'isobutyl acetate':350,'1-butanol':760,'tert-butylmethyl ether':830,'2-butanol':770,'3-methyl-1-butanol':760,'1-propanol':770,'1-pentanol':760,'propyl acetate':700,'isopropyl acetate':710,'ethyl formate':670,'ethyl ether':860,'methyl ethyl ketone':770};
+const CLASS3_B_V = {'heptane':900,'pentane':990,'anisole':310};
+const INCOMPAT = new Set(['ethanol|ethyl ether','ethyl ether|ethanol','acetone|ethyl formate','ethyl formate|acetone','ethyl formate|2-propanol','2-propanol|ethyl formate','ethyl acetate|2-butanol','2-butanol|ethyl acetate','2-methyl-1-propanol|isopropyl acetate','isopropyl acetate|2-methyl-1-propanol']);
+const MAX_PER_VF = 10;
+
+function setStatus(msg, cls=''){ const el=document.getElementById('status'); el.className=cls; el.textContent=msg; }
+function canon(name){ const k=(name||'').trim().toLowerCase(); return alias.get(k) || (name||'').trim(); }
+function classify(sol){ if(CLASS1.has(sol)) return 'Class 1'; if(CLASS2A.has(sol)) return 'Class 2A'; if(CLASS2B.has(sol)) return 'Class 2B'; if(sol in CLASS3_A_V || sol in CLASS3_B_V) return 'Class 3'; return 'Unknown'; }
+function parseLines(txt){ return (txt||'').split(/\n+/).map(l=>l.trim()).filter(Boolean).map(l=>{ const p=l.indexOf('|'); const id=p>=0? l.slice(0,p).trim():l.trim(); const rhs=p>=0? l.slice(p+1):''; const solvents=rhs.split(',').map(s=>canon(s)).filter(Boolean); return {id, solvents}; }); }
+function solubilityFor(id){ const rec=SolubilityDB[id]; return rec? (rec.solubility||'Unknown'):'Unknown'; }
+function groupClass3(list){ const A=[],B=[],sing=[]; for(const s of list){ if(s in CLASS3_B_V) B.push(s); else if(['butyl acetate','isobutyl acetate'].includes(s)) sing.push([s]); else if(s in CLASS3_A_V) A.push(s); }
+  function pack(L){ const groups=[]; for(const s of L){ let placed=false; for(const g of groups){ if(g.length>=MAX_PER_VF) continue; let ok=true; for(const t of g){ if(INCOMPAT.has(`${s}|${t}`)){ ok=false; break; } } if(ok){ g.push(s); placed=true; break; } } if(!placed) groups.push([s]); } return groups; }
+  const gA=pack(A), gB=pack(B);
+  return sing.concat(gA).concat(gB.map(g=>Object.assign(g,{_stock:'B'})));
+}
+
+function preprocessAndImport(rawText) {
+    const lines = rawText.split(/\n+/);
+    const remainingLines = [];
+    let importCount = 0;
+    const importRegex = /^(.+?)\s*->\s*(sol|insol)$/i;
+
+    for (const line of lines) {
+        const match = line.trim().match(importRegex);
+        if (match) {
+            const itemName = match[1].trim();
+            const solRaw = match[2].toLowerCase();
+            const solubility = solRaw === 'sol' ? 'Soluble' : 'Insoluble';
+            const msg = `Add '${itemName}' to the database as Water ${solubility}? \n(This will only last for the current session)`;
+            if (confirm(msg)) {
+                SolubilityDB[itemName] = { name: `${itemName} (session entry)`, solubility: solubility };
+                importCount++;
+            }
+        } else {
+            remainingLines.push(line);
+        }
+    }
+    if (importCount > 0) {
+        setStatus(`${importCount} item(s) added to session DB.`, 'ok');
+        populateReferenceLists(); // Refresh the reference list
+    }
+    return remainingLines.join('\n');
+}
+
+
+function plan(samples){
+  const warnings = { unknownSamples: [], unknownSolvents: [] };
+  const per=[];
+  const globalC3Set=new Set();
+
+  for(const smp of samples){
+    if (!SolubilityDB[smp.id] && !warnings.unknownSamples.includes(smp.id)) {
+        warnings.unknownSamples.push(smp.id);
+    }
+    for (const s of smp.solvents) {
+      if (classify(s) === 'Unknown' && s !== 'usp<467>' && s !== 'class 3') {
+        warnings.unknownSolvents.push({ sampleId: smp.id, solvent: s });
+      }
+    }
+
+    const sol=solubilityFor(smp.id);
+    const norm=smp.solvents.map(canon);
+    let mix;
+    const hasUspKeyword = norm.includes('usp<467>');
+    const hasClass3Keyword = norm.includes('class 3');
+    const requiresFullScreen = hasUspKeyword || hasClass3Keyword;
+
+    if (hasUspKeyword) {
+        if (sol === 'Soluble') {
+            mix = ['Class 1', 'Class 2A', 'Class 2B'];
+        } else { // Insoluble or Unknown
+            mix = ['Class 1', 'Class 2A in DMF', 'Class 2A in DMSO', 'Class 2B'];
+        }
+    } else {
+        const need = new Set();
+        for(const s of norm){
+            const c=classify(s);
+            if(c==='Class 1') need.add('Class 1');
+            if(c==='Class 2A') need.add('Class 2A');
+            if(c==='Class 2B') need.add('Class 2B');
+        }
+        mix = Array.from(need);
+    }
+    
+    const c3 = requiresFullScreen ? [] : norm.filter(s=> (s in CLASS3_A_V)||(s in CLASS3_B_V));
+    c3.forEach(s=>globalC3Set.add(s));
+
+    per.push({
+      sample:smp.id,
+      solubility:(sol==='Soluble'?'Water Soluble':(sol==='Insoluble'?'Water Insoluble':'Unknown')),
+      standardsNeeded:mix,
+      hasClass3:c3.length>0,
+      hasCumene: norm.includes('cumene'),
+      normSolvents: norm,
+      class3ScreeningNote: requiresFullScreen ? "Create a new processing method to perform Class 3 solvent screening per Table 6.6-3 Class 3 Residual Solvent Screening in STM 1012. No Class 3 standard is required for this sample." : null
+    });
+  }
+
+  function summarize(label){
+    const subset=per.filter(r=>r.solubility===label);
+    const classes=new Set();
+    const allClass2aSolventsInGroup = new Set();
+    let class3=false;
+    let hasCumeneInGroup = false;
+
+    for(const r of subset){
+      r.standardsNeeded.forEach(c=>classes.add(c));
+      if(r.hasClass3) class3=true;
+      if(r.hasCumene) hasCumeneInGroup = true;
+      for (const s of r.normSolvents) {
+        if (CLASS2A.has(s)) {
+          allClass2aSolventsInGroup.add(s);
+        }
+      }
+    }
+
+    if (allClass2aSolventsInGroup.size === 1 && allClass2aSolventsInGroup.has('cumene')) {
+      classes.delete('Class 2A');
+      classes.add('Class 2A in DMF');
+    } else if (hasCumeneInGroup) {
+      classes.add('Class 2A in DMF');
+    }
+
+    const list=[...classes].sort();
+    if(class3) list.push('Class 3');
+    return { samples: subset.map(r=>r.sample), classes:list };
+  }
+  
+  const globalC3 = Array.from(globalC3Set);
+  const vfGroups = groupClass3(globalC3);
+  const vf = vfGroups.map((g,i)=>({group:i+1, stock: (g._stock==='B'?'B (DMF diluent)':'A (Water diluent)'), members:g, volumes:g.map(x=> (x in CLASS3_B_V? CLASS3_B_V[x]: CLASS3_A_V[x]))}));
+  const A=[]; const B=[];
+  for(const s of globalC3){
+    if (s in CLASS3_B_V) { B.push({solvent:s, volume:CLASS3_B_V[s]}); } else { A.push({solvent:s, volume:CLASS3_A_V[s]}); }
+  }
+  A.sort((x,y)=>x.solvent.localeCompare(y.solvent)); B.sort((x,y)=>x.solvent.localeCompare(y.solvent));
+  const planResults = { perSample:per, summary:{ waterSoluble:summarize('Water Soluble'), waterInsoluble:summarize('Water Insoluble') }, class3All:{A:A,B:B}, vf:vf };
+  return { planResults, warnings };
+}
+
+function render(res){
+  const el=document.getElementById('results');
+  el.innerHTML='';
+
+  //--- RENDER WARNINGS ---
+  const warnings = res.warnings;
+  if (warnings.unknownSamples.length > 0 || warnings.unknownSolvents.length > 0) {
+    const warnCard = document.createElement('div');
+    warnCard.className = 'card';
+    let html = '<div class="section-title">⚠️ Warnings</div>';
+    if (warnings.unknownSamples.length > 0) {
+      html += `<div style="margin-top:12px"><b>Unknown Sample IDs:</b></div>
+               <p style="margin-top:4px">These item IDs were not found in the solubility database. Their solubility will be "Unknown".</p>
+               <ul>${warnings.unknownSamples.map(id => `<li><b>${id}</b></li>`).join('')}</ul>`;
+    }
+    if (warnings.unknownSolvents.length > 0) {
+      html += `<div style="margin-top:12px"><b>Unknown or Unclassified Solvents:</b></div>
+               <p style="margin-top:4px">These solvents are not recognized and will be ignored in the plan.</p>
+               <ul>${warnings.unknownSolvents.map(w => `<li><b>${w.solvent}</b> (in sample <b>${w.sampleId}</b>)</li>`).join('')}</ul>`;
+    }
+    warnCard.innerHTML = html;
+    el.appendChild(warnCard);
+  }
+
+  //--- RENDER PLAN ---
+  const planData = res.planResults;
+  const card=document.createElement('div'); card.className='card';
+  card.innerHTML='<div class="section-title">Per-Sample Details</div>'+
+    '<ul>'+ (planData.perSample.map(r=>`<li><b>${r.sample}</b> – <span class="pill">${r.solubility}</span>
+    ${r.class3ScreeningNote ? `<br><span class="warn" style="font-style:italic;">Note: ${r.class3ScreeningNote}</span>` : ''}
+    </li>`).join('')||'<li>(none)</li>') +'</ul>';
+  el.appendChild(card);
+
+  function block(title, grp){
+    const c=document.createElement('div'); c.className='card';
+    const classes = grp.classes.map(x=>`<li>${x}</li>`).join('');
+    c.innerHTML = `
+      <div class="section-title">${title}</div>
+      <div><b>Samples:</b> ${grp.samples.join(', ') || '(none)'}</div>
+      <div style="margin-top:12px"><b>Required Collections:</b></div>
+      <ul>${classes}</ul>`;
+    el.appendChild(c);
+  }
+  if (planData.summary.waterSoluble.classes.length > 0) {
+    block('Standards Needed – Water Soluble', planData.summary.waterSoluble);
+  }
+  if (planData.summary.waterInsoluble.classes.length > 0) {
+    block('Standards Needed – Water Insoluble', planData.summary.waterInsoluble);
+  }
+
+  // Combined Class 3 (list + VF grouping)
+  const c3Card=document.createElement('div'); c3Card.className='card';
+  const a = planData.class3All.A.length? planData.class3All.A.map(x=>`${x.solvent} (${x.volume} µL)`).join(', ') : 'None';
+  const b = planData.class3All.B.length? planData.class3All.B.map(x=>`${x.solvent} (${x.volume} µL)`).join(', ') : 'None';
+  c3Card.innerHTML = `
+    <div class="section-title">Class 3 Standard Preparation</div>
+    <div><b>Stock A (Water):</b> ${a}</div>
+    <div><b>Stock B (DMF):</b> ${b}</div>
+    <div class="section-title" style="margin-top:12px; font-size: 14px; border:none; margin-bottom: 8px;">Suggested VF Groupings</div>
+    ${planData.vf.length? planData.vf.map(g=>`
+      <div class="vf">
+        <h4>VF Group ${g.group} – Stock ${g.stock}</h4>
+        <table><thead><tr><th>Solvent</th><th>Intermediate Stock Volume (µL)</th></tr></thead>
+        <tbody>
+          ${g.members.map((m,i)=>`<tr><td>${m}</td><td>${g.volumes[i]}</td></tr>`).join('')}
+        </tbody></table>
+      </div>
+    `).join('') : '<div class="pill">No Class 3 solvents found.</div>'}
+  `;
+  if (planData.class3All.A.length > 0 || planData.class3All.B.length > 0) {
+    el.appendChild(c3Card);
+  }
+}
+
+function generate(){
+  try{
+    setStatus('', '');
+    let raw = document.getElementById('inputArea').value;
+    // raw = preprocessAndImport(raw); // Pre-process for on-the-fly imports - REMOVED
+    document.getElementById('inputArea').value = raw; // Update text area with remaining lines
+
+    if(!raw.trim()){ 
+        document.getElementById('results').innerHTML = '';
+        setStatus('No lines detected. Click “Use example” or paste your list.', 'warn'); 
+        return; 
+    }
+    const samples = parseLines(raw);
+    const resultContainer = plan(samples);
+    render(resultContainer);
+    
+    let currentStatus = document.getElementById('status').textContent;
+    if (resultContainer.warnings.unknownSamples.length > 0 || resultContainer.warnings.unknownSolvents.length > 0) {
+      setStatus((currentStatus ? currentStatus + ' ' : '') + 'Plan generated with warnings.', 'warn');
+    } else {
+      setStatus((currentStatus ? currentStatus + ' ' : '') + 'Plan generated.', 'ok');
+    }
+  }catch(e){ console.error(e); setStatus('Error: '+(e.message||e), 'err'); }
+}
+
+function clearAll() {
+    document.getElementById('inputArea').value = '';
+    document.getElementById('results').innerHTML = '';
+    setStatus('');
+    document.getElementById('lookupId').value = '';
+    document.getElementById('lookupOut').innerHTML = '';
+    document.getElementById('lookupSolventName').value = '';
+    document.getElementById('lookupSolventOut').innerHTML = '';
+}
+
+function demo(){ document.getElementById('inputArea').value = 'RM0110 | USP<467>\nRM0629 | Cumene, Ethanol\n000316 | Cumene, Toluene'; generate(); }
+function lookupSol(){
+    const id = document.getElementById('lookupId').value.trim();
+    if (!id) return;
+    const rec = SolubilityDB[id];
+    document.getElementById('lookupOut').innerHTML = rec ? `<div><b>${id}</b> – ${rec.name}<br><span class="pill">${rec.solubility}</span></div>` : `<div><b>${id}</b> – <span class="pill err">Not Found</span></div>`;
+}
+function lookupSolventClass() {
+    const solventName = document.getElementById('lookupSolventName').value;
+    if (!solventName) return;
+    const canonicalName = canon(solventName);
+    const solventClass = classify(canonicalName);
+    document.getElementById('lookupSolventOut').innerHTML = `<div><b>${solventName}</b> – <span class="pill">${solventClass}</span></div>`;
+}
+
+function populateReferenceLists() {
+    const dbRef = document.getElementById('dbRef');
+    const solventRef = document.getElementById('solventRef');
+    
+    // DB List
+    const dbItems = Object.entries(SolubilityDB).sort((a,b)=>a[0].localeCompare(b[0]));
+    dbRef.innerHTML = `<ul>${dbItems.map(([id, data]) => `<li><b>${id}</b>: ${data.name} (<span class="pill">${data.solubility}</span>)</li>`).join('')}</ul>`;
+    document.getElementById('dbInfo').textContent = `Embedded items: ${dbItems.length}`;
+
+    // Solvent List
+    let solventHtml = '<div><h4>Class 1</h4><ul>' + [...CLASS1].sort().map(s=>`<li>${s}</li>`).join('') + '</ul></div>';
+    solventHtml += '<div><h4>Class 2A</h4><ul>' + [...CLASS2A].sort().map(s=>`<li>${s}</li>`).join('') + '</ul></div>';
+    solventHtml += '<div><h4>Class 2B</h4><ul>' + [...CLASS2B].sort().map(s=>`<li>${s}</li>`).join('') + '</ul></div>';
+    solventHtml += '<div><h4>Class 3</h4><ul>' + [...Object.keys(CLASS3_A_V), ...Object.keys(CLASS3_B_V)].sort().map(s=>`<li>${s}</li>`).join('') + '</ul></div>';
+    solventRef.innerHTML = solventHtml;
+}
+
+window.addEventListener('DOMContentLoaded', populateReferenceLists);
+</script>
+</body>
+</html>
